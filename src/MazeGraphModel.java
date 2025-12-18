@@ -8,13 +8,16 @@ public class MazeGraphModel {
     private Node[][] grid;
     private final Random random;
 
-    // Konfigurasi Generasi
-    private static final double EXTRA_PATHS_PERCENTAGE = 0.1; // 10% dinding tambahan dihapus (Multiple Paths)
-    private static final double OBSTACLE_DENSITY = 0.4;       // 40% area adalah rintangan, sisanya Terrace
+    // Parameter Kustomisasi
+    private double terrainProbability; // Peluang munculnya Air/Lumpur (0.0 - 1.0)
+    private double wallDensity;        // 1.0 = Maze Sempurna, 0.0 = Open Field (banyak tembok hancur)
 
-    public MazeGraphModel(int cols, int rows) {
+    public MazeGraphModel(int cols, int rows, double terrainProb, double wallDensity) {
         this.cols = cols;
         this.rows = rows;
+        this.terrainProbability = terrainProb;
+        this.wallDensity = wallDensity;
+
         this.random = new Random();
         initializeGrid();
         generateMaze();
@@ -30,15 +33,16 @@ public class MazeGraphModel {
             for (int y = 0; y < rows; y++) {
                 grid[x][y] = new Node(x, y);
 
-                // Default: Terrace
+                // 1. Set Terrain (Lantai) berdasarkan terrainProbability
+                // Default Terrace (Aman)
                 grid[x][y].terrain = TerrainType.TERRACE;
 
-                // Random Obstacles
-                if (random.nextDouble() < OBSTACLE_DENSITY) {
+                // Jika random < probabilitas, ubah jadi rintangan (Grass/Mud/Water)
+                if (random.nextDouble() < terrainProbability) {
                     grid[x][y].terrain = TerrainType.getRandomObstacle();
                 }
 
-                // Start & End wajib aman (Terrace)
+                // Start (0,0) & End (Max,Max) Wajib Terrace (Aman)
                 if ((x == 0 && y == 0) || (x == cols - 1 && y == rows - 1)) {
                     grid[x][y].terrain = TerrainType.TERRACE;
                 }
@@ -53,7 +57,8 @@ public class MazeGraphModel {
         startNode.visited = true;
         addNeighborsToWalls(startNode, walls);
 
-        // 1. Prim's Algorithm (Perfect Maze)
+        // --- TAHAP 1: Prim's Algorithm (Membangun Struktur Utama) ---
+        // Ini akan membuat maze "Sempurna" (Full Walls, 1 jalur ke mana saja)
         while (!walls.isEmpty()) {
             int randomIndex = random.nextInt(walls.size());
             Edge currentEdge = walls.remove(randomIndex);
@@ -68,10 +73,17 @@ public class MazeGraphModel {
             }
         }
 
-        // 2. Add Extra Paths (Membuat Multiple Paths/Loops)
-        addExtraPaths();
+        // --- TAHAP 2: Mengatur Wall Density (Menghancurkan Tembok Sisa) ---
+        // Logika:
+        // Wall Density 1.0 (High) -> Tidak ada tembok tambahan yang dihancurkan (Maze Sempurna).
+        // Wall Density 0.0 (Low)  -> Banyak tembok dihancurkan (Jadi lapangan terbuka).
 
-        // 3. Reset untuk persiapan solving
+        // extraPathFactor semakin besar jika wallDensity semakin kecil
+        double extraPathFactor = (1.0 - wallDensity) * 0.4; // Maksimal 40% dinding sisa dihapus
+
+        addExtraPaths(extraPathFactor);
+
+        // Reset visited agar siap untuk algoritma solving
         resetVisited();
     }
 
@@ -98,9 +110,9 @@ public class MazeGraphModel {
         }
     }
 
-    private void addExtraPaths() {
+    private void addExtraPaths(double factor) {
         int totalCells = cols * rows;
-        int numExtraPaths = (int) (totalCells * EXTRA_PATHS_PERCENTAGE);
+        int numExtraPaths = (int) (totalCells * factor);
         int[][] directions = {{0, -1}, {0, 1}, {-1, 0}, {1, 0}};
 
         for (int i = 0; i < numExtraPaths; i++) {
@@ -108,14 +120,15 @@ public class MazeGraphModel {
             int y = random.nextInt(rows);
             Node nodeA = grid[x][y];
 
-            // Mencoba menghancurkan dinding acak
+            // Coba hancurkan dinding ke tetangga acak
             for (int attempt = 0; attempt < 10; attempt++) {
                 int[] dir = directions[random.nextInt(directions.length)];
                 int nx = x + dir[0];
                 int ny = y + dir[1];
+
                 if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
                     Node nodeB = grid[nx][ny];
-                    // Jika ada dinding (belum tetangga), hancurkan
+                    // Jika ADA dinding (artinya belum bertetangga), kita hancurkan
                     if (!nodeA.neighbors.contains(nodeB)) {
                         nodeA.neighbors.add(nodeB);
                         nodeB.neighbors.add(nodeA);
