@@ -7,11 +7,10 @@ public class MazeGraphModel {
     private final int rows;
     private Node[][] grid;
     private final Random random;
-    private static final double EXTRA_PATHS_PERCENTAGE = 0.1;
 
-    // Persentase area yang akan tertutup rintangan (Rumput/Air/Lumpur)
-    // Sisanya (60%) akan transparan (Terrace) agar background terlihat
-    private static final double OBSTACLE_DENSITY = 0.4;
+    // Konfigurasi Generasi
+    private static final double EXTRA_PATHS_PERCENTAGE = 0.1; // 10% dinding tambahan dihapus (Multiple Paths)
+    private static final double OBSTACLE_DENSITY = 0.4;       // 40% area adalah rintangan, sisanya Terrace
 
     public MazeGraphModel(int cols, int rows) {
         this.cols = cols;
@@ -31,11 +30,10 @@ public class MazeGraphModel {
             for (int y = 0; y < rows; y++) {
                 grid[x][y] = new Node(x, y);
 
-                // LOGIKA BARU:
-                // Secara default, set ke TERRACE (Transparan)
+                // Default: Terrace
                 grid[x][y].terrain = TerrainType.TERRACE;
 
-                // Acak: Hanya 40% kemungkinan menjadi rintangan (Grass/Mud/Water)
+                // Random Obstacles
                 if (random.nextDouble() < OBSTACLE_DENSITY) {
                     grid[x][y].terrain = TerrainType.getRandomObstacle();
                 }
@@ -55,6 +53,7 @@ public class MazeGraphModel {
         startNode.visited = true;
         addNeighborsToWalls(startNode, walls);
 
+        // 1. Prim's Algorithm (Perfect Maze)
         while (!walls.isEmpty()) {
             int randomIndex = random.nextInt(walls.size());
             Edge currentEdge = walls.remove(randomIndex);
@@ -68,7 +67,11 @@ public class MazeGraphModel {
                 addNeighborsToWalls(v, walls);
             }
         }
+
+        // 2. Add Extra Paths (Membuat Multiple Paths/Loops)
         addExtraPaths();
+
+        // 3. Reset untuk persiapan solving
         resetVisited();
     }
 
@@ -104,12 +107,15 @@ public class MazeGraphModel {
             int x = random.nextInt(cols);
             int y = random.nextInt(rows);
             Node nodeA = grid[x][y];
+
+            // Mencoba menghancurkan dinding acak
             for (int attempt = 0; attempt < 10; attempt++) {
                 int[] dir = directions[random.nextInt(directions.length)];
                 int nx = x + dir[0];
                 int ny = y + dir[1];
                 if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
                     Node nodeB = grid[nx][ny];
+                    // Jika ada dinding (belum tetangga), hancurkan
                     if (!nodeA.neighbors.contains(nodeB)) {
                         nodeA.neighbors.add(nodeB);
                         nodeB.neighbors.add(nodeA);
