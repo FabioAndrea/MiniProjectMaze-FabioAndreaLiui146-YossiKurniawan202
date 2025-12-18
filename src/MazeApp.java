@@ -3,9 +3,6 @@ import javax.swing.border.CompoundBorder;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.LineBorder;
 import javax.swing.border.MatteBorder;
-import javax.swing.table.DefaultTableCellRenderer;
-import javax.swing.table.DefaultTableModel;
-import javax.swing.table.JTableHeader;
 import java.awt.*;
 import java.io.File;
 import java.io.IOException;
@@ -19,27 +16,30 @@ public class MazeApp extends JFrame {
     private boolean isAnimating = false;
     private Image fullBackgroundImage;
 
-    // Komponen UI
+    // Komponen UI Control
     private JComboBox<String> algorithmSelector;
 
-    // --- KOMPONEN STATISTIK (TEMA JUNGLE) ---
-    private DefaultTableModel statsModel;
-    private JTable statsTable;
-    private JLabel lblStatus;
+    // --- KOMPONEN STATISTIK BARU (DROPDOWN MODEL) ---
+    private JComboBox<String> statsDropdown; // Dropdown untuk pilih hasil
+    private JLabel lblTime, lblCost, lblVisited; // Label detail data
+    private JLabel lblEfficiencySummary; // Label kesimpulan efisiensi
 
-    // Palet Warna Jungle Khusus Statistik
-    private final Color JUNGLE_BG_PANEL = new Color(30, 50, 30);     // Latar belakang panel (Hutan Gelap)
-    private final Color JUNGLE_WOOD_DARK = new Color(90, 60, 30);    // Warna Kayu Gelap (Header/Border)
-    private final Color JUNGLE_PARCHMENT = new Color(235, 225, 200); // Warna Kertas Kuno (Isi Tabel)
-    private final Color JUNGLE_TEXT_DARK = new Color(60, 40, 20);    // Teks Coklat Tua
-    private final Color JUNGLE_ACCENT_GOLD = new Color(255, 215, 0); // Aksen Emas
+    // Penyimpanan Data Hasil Run
+    private Map<String, AlgoResult> runHistory = new LinkedHashMap<>();
+
+    // Palet Warna Jungle
+    private final Color JUNGLE_BG_PANEL = new Color(30, 50, 30);
+    private final Color JUNGLE_WOOD_DARK = new Color(90, 60, 30);
+    private final Color JUNGLE_PARCHMENT = new Color(235, 225, 200);
+    private final Color JUNGLE_TEXT_DARK = new Color(60, 40, 20);
+    private final Color JUNGLE_ACCENT_GOLD = new Color(255, 215, 0);
 
     public MazeApp() {
-        setTitle("Maze Solver - Jungle Analytics");
+        setTitle("Maze Solver - Jungle Logs");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLayout(new BorderLayout());
 
-        // Load Background Image
+        // Load Background
         try {
             fullBackgroundImage = ImageIO.read(new File("C:/Backgroundmaze.jpg"));
         } catch (IOException e) {
@@ -49,7 +49,7 @@ public class MazeApp extends JFrame {
         mazeModel = new MazeGraphModel(30, 20);
         mazePanel = new MazePanel(mazeModel);
 
-        // WRAPPER PANEL (Center - Tetap Gelap Biasa)
+        // WRAPPER PANEL
         JPanel centerWrapper = new JPanel(new GridBagLayout()) {
             @Override
             protected void paintComponent(Graphics g) {
@@ -64,14 +64,13 @@ public class MazeApp extends JFrame {
         };
         centerWrapper.setBackground(new Color(45, 45, 45));
         centerWrapper.add(mazePanel);
-
         JScrollPane scrollPane = new JScrollPane(centerWrapper);
         scrollPane.setBorder(null);
 
-        // --- PANEL STATISTIK (KANAN - TEMA JUNGLE BARU) ---
-        JPanel rightStatsPanel = createStatsPanel();
+        // --- PANEL STATISTIK KANAN (MODIFIKASI) ---
+        JPanel rightStatsPanel = createJungleStatsPanel();
 
-        // --- PANEL CONTROL (BAWAH - TETAP SAMA) ---
+        // --- PANEL CONTROL BAWAH ---
         JPanel controlPanel = new JPanel();
         controlPanel.setBackground(new Color(60, 60, 60));
         controlPanel.setLayout(new FlowLayout(FlowLayout.CENTER, 15, 10));
@@ -103,7 +102,7 @@ public class MazeApp extends JFrame {
             if (isAnimating) return;
             mazeModel.generateMaze();
             mazePanel.setMazeModel(mazeModel);
-            calculateAndShowStats();
+            resetStats(); // Reset data statistik saat map baru
         });
 
         btnSolve.addActionListener(e -> {
@@ -113,7 +112,19 @@ public class MazeApp extends JFrame {
             if (selected.equals("DFS")) code = "DFS";
             else if (selected.equals("Dijkstra")) code = "DIJKSTRA";
             else if (selected.contains("A*")) code = "ASTAR";
-            solveMaze(code);
+
+            // Jalankan animasi (statistik muncul setelah selesai)
+            solveMaze(code, selected);
+        });
+
+        // Event Listener untuk Dropdown Statistik (Ganti tampilan data saat dipilih)
+        statsDropdown.addActionListener(e -> {
+            String selectedAlgo = (String) statsDropdown.getSelectedItem();
+            if (selectedAlgo != null && runHistory.containsKey(selectedAlgo)) {
+                showAlgoDetails(runHistory.get(selectedAlgo));
+            } else {
+                clearInfoDisplay();
+            }
         });
 
         add(scrollPane, BorderLayout.CENTER);
@@ -122,8 +133,6 @@ public class MazeApp extends JFrame {
 
         setSize(1350, 850);
         setLocationRelativeTo(null);
-
-        SwingUtilities.invokeLater(this::calculateAndShowStats);
     }
 
     private JButton createButton(String text) {
@@ -136,228 +145,210 @@ public class MazeApp extends JFrame {
     }
 
     // ---------------------------------------------------------
-    // BAGIAN YANG DIUBAH: DESAIN PANEL STATISTIK JUNGLE
+    // PANEL STATISTIK BARU (DROPDOWN + DETAIL)
     // ---------------------------------------------------------
-    private JPanel createStatsPanel() {
+    private JPanel createJungleStatsPanel() {
         JPanel panel = new JPanel(new BorderLayout());
-        panel.setPreferredSize(new Dimension(380, 0));
-        // Latar belakang panel gelap seperti dalam hutan
+        panel.setPreferredSize(new Dimension(350, 0));
         panel.setBackground(JUNGLE_BG_PANEL);
-
-        // Border majemuk: Garis kayu tebal di luar, padding di dalam
         panel.setBorder(new CompoundBorder(
-                new MatteBorder(0, 8, 0, 0, JUNGLE_WOOD_DARK), // Frame Kayu Kiri
-                new EmptyBorder(15, 15, 15, 15) // Padding isi
+                new MatteBorder(0, 8, 0, 0, JUNGLE_WOOD_DARK),
+                new EmptyBorder(20, 20, 20, 20)
         ));
 
-        // Judul dengan gaya petualangan
+        // 1. HEADER
         JLabel lblTitle = new JLabel("STATISTIC", JLabel.CENTER);
-        lblTitle.setFont(new Font("Georgia", Font.BOLD, 22)); // Font Serif agar lebih klasik
+        lblTitle.setFont(new Font("Georgia", Font.BOLD, 20));
         lblTitle.setForeground(JUNGLE_ACCENT_GOLD);
         lblTitle.setBorder(new EmptyBorder(0, 0, 20, 0));
 
-        // Tabel Data
-        String[] cols = {"Rank", "Algorithm", "Cost", "Visited", "Time"};
-        Object[][] initData = {};
+        // 2. DROPDOWN SELEKSI HASIL
+        JLabel lblSelect = new JLabel("Lihat Data Algoritma:");
+        lblSelect.setForeground(JUNGLE_PARCHMENT);
+        lblSelect.setFont(new Font("SansSerif", Font.PLAIN, 12));
 
-        statsModel = new DefaultTableModel(initData, cols) {
-            @Override public boolean isCellEditable(int row, int column) { return false; }
-        };
+        statsDropdown = new JComboBox<>();
+        statsDropdown.setFont(new Font("Georgia", Font.BOLD, 14));
+        statsDropdown.setBackground(JUNGLE_PARCHMENT);
+        statsDropdown.setForeground(JUNGLE_TEXT_DARK);
 
-        statsTable = new JTable(statsModel);
-        statsTable.setRowHeight(50); // Baris lebih tinggi agar kokoh
-        statsTable.setFont(new Font("Georgia", Font.PLAIN, 14));
-        statsTable.setGridColor(JUNGLE_WOOD_DARK); // Garis grid warna kayu
-        statsTable.setIntercellSpacing(new Dimension(1, 1)); // Jarak antar sel
+        JPanel topSection = new JPanel(new BorderLayout(0, 5));
+        topSection.setBackground(JUNGLE_BG_PANEL);
+        topSection.add(lblSelect, BorderLayout.NORTH);
+        topSection.add(statsDropdown, BorderLayout.CENTER);
+        topSection.setBorder(new EmptyBorder(0, 0, 20, 0));
 
-        // Custom Renderer untuk membuat sel terlihat seperti kertas kuno (Parchment)
-        DefaultTableCellRenderer jungleRenderer = new DefaultTableCellRenderer() {
-            @Override
-            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
-                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-                if (!isSelected) {
-                    c.setBackground(JUNGLE_PARCHMENT); // Background kertas kuno
-                    c.setForeground(JUNGLE_TEXT_DARK); // Teks coklat tua
-                } else {
-                    c.setBackground(JUNGLE_ACCENT_GOLD.darker()); // Warna seleksi
-                    c.setForeground(Color.BLACK);
-                }
-                setHorizontalAlignment(JLabel.CENTER);
-                return c;
-            }
-        };
+        // 3. PANEL DETAIL (KOTAK INFORMASI)
+        JPanel infoPanel = new JPanel(new GridLayout(3, 1, 0, 10));
+        infoPanel.setBackground(JUNGLE_BG_PANEL);
 
-        // Terapkan renderer ke semua kolom
-        for (int i = 0; i < statsTable.getColumnCount(); i++) {
-            statsTable.getColumnModel().getColumn(i).setCellRenderer(jungleRenderer);
-        }
+        lblTime = createDetailCard("⏳ Waktu Eksekusi");
+        lblCost = createDetailCard("💎 Total Cost (Biaya)");
+        lblVisited = createDetailCard("👣 Node Dikunjungi");
 
-        // Styling Header Tabel (Kayu Gelap)
-        JTableHeader header = statsTable.getTableHeader();
-        header.setFont(new Font("Georgia", Font.BOLD, 14));
-        header.setBackground(JUNGLE_WOOD_DARK);
-        header.setForeground(JUNGLE_PARCHMENT);
-        header.setPreferredSize(new Dimension(0, 40));
-        // Border header agar terlihat timbul
-        header.setBorder(BorderFactory.createBevelBorder(javax.swing.border.BevelBorder.RAISED, JUNGLE_WOOD_DARK.brighter(), JUNGLE_WOOD_DARK.darker()));
+        infoPanel.add(lblTime);
+        infoPanel.add(lblCost);
+        infoPanel.add(lblVisited);
 
-        // ScrollPane dengan border kayu
-        JScrollPane tableScroll = new JScrollPane(statsTable);
-        tableScroll.setBorder(new LineBorder(JUNGLE_WOOD_DARK, 3)); // Bingkai kayu tebal
-        tableScroll.getViewport().setBackground(JUNGLE_BG_PANEL);
+        // 4. SUMMARY (KESIMPULAN EFISIENSI)
+        lblEfficiencySummary = new JLabel("<html><center>Belum ada data.<br>Jalankan algoritma!</center></html>", JLabel.CENTER);
+        lblEfficiencySummary.setFont(new Font("Georgia", Font.ITALIC, 13));
+        lblEfficiencySummary.setForeground(JUNGLE_PARCHMENT);
+        lblEfficiencySummary.setBorder(new EmptyBorder(20, 0, 0, 0));
 
-        // Status Label di bawah
-        lblStatus = new JLabel("<html><center>Mengamati jejak...</center></html>", JLabel.CENTER);
-        lblStatus.setFont(new Font("Georgia", Font.ITALIC, 14));
-        lblStatus.setForeground(JUNGLE_PARCHMENT);
-        lblStatus.setBorder(new EmptyBorder(20, 0, 0, 0));
+        // Gabungkan
+        JPanel contentPanel = new JPanel(new BorderLayout());
+        contentPanel.setBackground(JUNGLE_BG_PANEL);
+        contentPanel.add(topSection, BorderLayout.NORTH);
+        contentPanel.add(infoPanel, BorderLayout.CENTER);
 
         panel.add(lblTitle, BorderLayout.NORTH);
-        panel.add(tableScroll, BorderLayout.CENTER);
-        panel.add(lblStatus, BorderLayout.SOUTH);
+        panel.add(contentPanel, BorderLayout.CENTER);
+        panel.add(lblEfficiencySummary, BorderLayout.SOUTH);
 
         return panel;
     }
 
-    // ---------------------------------------------------------
-    // LOGIKA STATISTIK (TETAP SAMA DENGAN YANG SUDAH DIPERBAIKI)
-    // ---------------------------------------------------------
-    private void calculateAndShowStats() {
-        Node start = mazeModel.getGrid()[0][0];
-        Node end = mazeModel.getGrid()[mazeModel.getCols() - 1][mazeModel.getRows() - 1];
+    private JLabel createDetailCard(String title) {
+        JLabel lbl = new JLabel("<html><div style='text-align:center;'><b>" + title + "</b><br><font size='5'>-</font></div></html>", JLabel.CENTER);
+        lbl.setOpaque(true);
+        lbl.setBackground(JUNGLE_PARCHMENT);
+        lbl.setForeground(JUNGLE_TEXT_DARK);
+        lbl.setFont(new Font("Georgia", Font.PLAIN, 14));
+        lbl.setBorder(new LineBorder(JUNGLE_WOOD_DARK, 2, true)); // Rounded border effect hint
+        return lbl;
+    }
 
-        List<AlgoResult> results = new ArrayList<>();
-        mazeModel.resetVisited(); results.add(runSilentAlgo("BFS", start, end));
-        mazeModel.resetVisited(); results.add(runSilentAlgo("DFS", start, end));
-        mazeModel.resetVisited(); results.add(runSilentAlgo("DIJKSTRA", start, end));
-        mazeModel.resetVisited(); results.add(runSilentAlgo("ASTAR", start, end));
+    // ---------------------------------------------------------
+    // LOGIKA DATA & UPDATE UI
+    // ---------------------------------------------------------
 
+    private void resetStats() {
+        runHistory.clear();
+        statsDropdown.removeAllItems();
+        clearInfoDisplay();
+        lblEfficiencySummary.setText("<html><center>Map Baru.<br>Siap Menjelajah!</center></html>");
+    }
+
+    private void clearInfoDisplay() {
+        updateCard(lblTime, "⏳ Waktu Eksekusi", "-");
+        updateCard(lblCost, "💎 Total Cost", "-");
+        updateCard(lblVisited, "👣 Node Dikunjungi", "-");
+    }
+
+    private void updateCard(JLabel label, String title, String value) {
+        label.setText("<html><div style='text-align:center; width:250px;'><b>" + title + "</b><br><font size='5'>" + value + "</font></div></html>");
+    }
+
+    private void showAlgoDetails(AlgoResult res) {
+        updateCard(lblTime, "⏳ Waktu Eksekusi", String.format("%.2f ms", res.getDurationMs()));
+        updateCard(lblCost, "💎 Total Cost", (res.totalCost >= Integer.MAX_VALUE/2) ? "Gagal" : String.valueOf(res.totalCost));
+        updateCard(lblVisited, "👣 Node Dikunjungi", String.valueOf(res.visitedCount));
+    }
+
+    private void updateEfficiencySummary() {
+        if (runHistory.isEmpty()) return;
+
+        AlgoResult best = null;
+        AlgoResult worst = null;
+
+        for (AlgoResult res : runHistory.values()) {
+            if (res.totalCost >= Integer.MAX_VALUE/2) continue; // Skip gagal
+
+            if (best == null || res.totalCost < best.totalCost) best = res;
+            if (worst == null || res.totalCost > worst.totalCost) worst = res;
+        }
+
+        if (best != null) {
+            String bestName = best.algorithmName;
+            String worstName = (worst != null && !worst.algorithmName.equals(bestName)) ? worst.algorithmName : "-";
+
+            lblEfficiencySummary.setText("<html><div style='text-align:center; border-top:1px solid #d4af37; padding-top:10px;'>" +
+                    "✅ <b>Paling Efisien:</b> <font color='#90EE90'>" + bestName + "</font><br>" +
+                    "❌ <b>Paling Boros:</b> <font color='#FF6347'>" + worstName + "</font>" +
+                    "</div></html>");
+        }
+    }
+
+    // ---------------------------------------------------------
+    // SOLVING & ANIMASI (LOGIKA LAMA DISESUAIKAN)
+    // ---------------------------------------------------------
+    private void solveMaze(String algorithmCode, String displayName) {
+        isAnimating = true;
         mazeModel.resetVisited();
+        mazePanel.clearPath();
+        algorithmSelector.setEnabled(false);
 
-        // Sorting: Cost Terendah -> Waktu Tercepat
-        Collections.sort(results, (a, b) -> {
-            if (a.totalCost != b.totalCost) return Integer.compare(a.totalCost, b.totalCost);
-            return Double.compare(a.durationNano, b.durationNano);
-        });
-
-        statsModel.setRowCount(0);
-
-        // Menggunakan HTML font size agar medali terlihat jelas
-        String[] medals = {
-                "<html><font color='#604020'>1st</font></html>",
-                "<html><font color='#604020'>2nd</font></html>",
-                "<html><font color='#604020'>3rd</font></html>",
-                "<html><font color='#604020'>4th</font></html>"
-        };
-
-        for (int i = 0; i < results.size(); i++) {
-            AlgoResult res = results.get(i);
-            String rank = (i < medals.length) ? medals[i] : String.valueOf(i + 1);
-
-            String costText = (res.totalCost >= Integer.MAX_VALUE/2) ? "X" : String.valueOf(res.totalCost);
-            String visitedText = String.valueOf(res.visitedCount);
-            String timeText = String.format("%.2f ms", res.getDurationMs());
-
-            statsModel.addRow(new Object[]{rank, res.algorithmName, costText, visitedText, timeText});
-        }
-
-        String winner = results.get(0).algorithmName;
-        // Update status dengan warna emas
-        lblStatus.setText("<html><center>Penjelajah Terbaik:<br><b style='color:#FFDF00; font-size:16px'>" + winner + "</b> (Paling Efisien!)</center></html>");
-    }
-
-    // --- HELPER: SILENT RUNNERS (TETAP SAMA) ---
-    private AlgoResult runSilentAlgo(String type, Node start, Node end) {
-        long startTime = System.nanoTime();
-        int visitedNodes = 0;
-        int costResult = Integer.MAX_VALUE / 2;
-        boolean found = false;
-
-        if (type.equals("BFS")) {
-            Queue<Node> queue = new LinkedList<>();
-            queue.add(start); start.visited = true; visitedNodes++;
-            while(!queue.isEmpty()){
-                Node u = queue.poll();
-                if(u == end) { found=true; costResult=calculatePathCost(u); break; }
-                for(Node v : u.neighbors){
-                    if(!v.visited){ v.visited=true; v.parent=u; visitedNodes++; queue.add(v); }
-                }
-            }
-        } else if (type.equals("DFS")) {
-            Stack<Node> stack = new Stack<>();
-            stack.push(start); start.visited = true; visitedNodes++;
-            while(!stack.isEmpty()){
-                Node u = stack.pop();
-                if(u == end) { found=true; costResult=calculatePathCost(u); break; }
-                for(Node v : u.neighbors){
-                    if(!v.visited){ v.visited=true; v.parent=u; visitedNodes++; stack.push(v); }
-                }
-            }
-        } else if (type.equals("DIJKSTRA")) {
-            PriorityQueue<PathState> pq = new PriorityQueue<>();
-            Map<Node, Integer> dist = new HashMap<>();
-            dist.put(start, 0); pq.add(new PathState(start, 0));
-            while(!pq.isEmpty()){
-                PathState curr = pq.poll(); Node u = curr.node;
-                if(curr.cost > dist.getOrDefault(u, Integer.MAX_VALUE)) continue;
-                u.visited=true; visitedNodes++;
-                if(u == end) { found=true; costResult=curr.cost; break; }
-                for(Node v : u.neighbors){
-                    int newDist = curr.cost + v.getCost();
-                    if(newDist < dist.getOrDefault(v, Integer.MAX_VALUE)){
-                        dist.put(v, newDist); v.parent=u; pq.add(new PathState(v, newDist));
-                    }
-                }
-            }
-        } else if (type.equals("ASTAR")) {
-            PriorityQueue<AStarState> pq = new PriorityQueue<>();
-            Map<Node, Integer> gScore = new HashMap<>();
-            gScore.put(start, 0);
-            pq.add(new AStarState(start, 0, Math.abs(start.x-end.x)+Math.abs(start.y-end.y)));
-            while(!pq.isEmpty()){
-                AStarState curr = pq.poll(); Node u = curr.node;
-                if(curr.gCost > gScore.getOrDefault(u, Integer.MAX_VALUE)) continue;
-                u.visited=true; visitedNodes++;
-                if(u == end) { found=true; costResult=curr.gCost; break; }
-                for(Node v : u.neighbors){
-                    int newG = curr.gCost + v.getCost();
-                    if(newG < gScore.getOrDefault(v, Integer.MAX_VALUE)){
-                        gScore.put(v, newG); v.parent=u;
-                        pq.add(new AStarState(v, newG, Math.abs(v.x-end.x)+Math.abs(v.y-end.y)));
-                    }
-                }
-            }
-        }
-        long endTime = System.nanoTime();
-        return new AlgoResult(type, endTime - startTime, 0, visitedNodes, found ? costResult : Integer.MAX_VALUE);
-    }
-
-    private int calculatePathCost(Node endNode) {
-        int cost = 0; Node temp = endNode;
-        while(temp != null) { cost += temp.getCost(); temp = temp.parent; }
-        return cost;
-    }
-
-    // --- VISUAL SOLVERS (TETAP SAMA) ---
-    private void solveMaze(String algorithm) {
-        isAnimating = true; mazeModel.resetVisited(); mazePanel.clearPath(); algorithmSelector.setEnabled(false);
         new Thread(() -> {
-            Node start = mazeModel.getGrid()[0][0]; Node end = mazeModel.getGrid()[mazeModel.getCols() - 1][mazeModel.getRows() - 1];
+            Node start = mazeModel.getGrid()[0][0];
+            Node end = mazeModel.getGrid()[mazeModel.getCols() - 1][mazeModel.getRows() - 1];
             boolean found = false;
-            if (algorithm.equals("BFS")) found = runBFS(start, end);
-            else if (algorithm.equals("DFS")) found = runDFS(start, end);
-            else if (algorithm.equals("DIJKSTRA")) found = (runDijkstra(start, end) != -1);
-            else if (algorithm.equals("ASTAR")) found = (runAStar(start, end) != -1);
 
+            long startTime = System.nanoTime();
+            int visitedCount = 0;
+            int finalCost = Integer.MAX_VALUE;
+
+            // Kita perlu modifikasi sedikit runner untuk return data statistik real (bukan silent)
+            // Tapi karena struktur kode sebelumnya terpisah visual/silent, kita pakai visual runner
+            // lalu hitung statistik manual setelah selesai visualisasi agar akurat dengan apa yang dilihat user.
+
+            if (algorithmCode.equals("BFS")) found = runBFS(start, end);
+            else if (algorithmCode.equals("DFS")) found = runDFS(start, end);
+            else if (algorithmCode.equals("DIJKSTRA")) found = (runDijkstra(start, end) != -1);
+            else if (algorithmCode.equals("ASTAR")) found = (runAStar(start, end) != -1);
+
+            long endTime = System.nanoTime();
+
+            // Hitung statistik final setelah visualisasi selesai
             if (found) {
-                List<Node> path = new ArrayList<>(); Node current = end;
-                while (current != null) { path.add(current); current = current.parent; }
+                // Reconstruct path untuk display & hitung cost
+                List<Node> path = new ArrayList<>();
+                Node current = end;
+                int calcCost = 0;
+                while (current != null) {
+                    path.add(current);
+                    calcCost += current.getCost();
+                    current = current.parent;
+                }
+                finalCost = calcCost;
                 mazePanel.setFinalPath(path);
-            } else { JOptionPane.showMessageDialog(this, "Path not found!"); }
-            algorithmSelector.setEnabled(true); isAnimating = false;
+            }
+
+            // Hitung total visited dari grid
+            for(int x=0; x<mazeModel.getCols(); x++) {
+                for(int y=0; y<mazeModel.getRows(); y++) {
+                    if(mazeModel.getGrid()[x][y].visited) visitedCount++;
+                }
+            }
+
+            // Simpan Hasil ke History
+            AlgoResult res = new AlgoResult(displayName, endTime - startTime, 0, visitedCount, found ? finalCost : Integer.MAX_VALUE);
+
+            // Update UI di Thread Swing
+            SwingUtilities.invokeLater(() -> {
+                runHistory.put(displayName, res);
+
+                // Update Dropdown (hindari duplikasi item)
+                boolean exists = false;
+                for (int i = 0; i < statsDropdown.getItemCount(); i++) {
+                    if (statsDropdown.getItemAt(i).equals(displayName)) {
+                        exists = true; break;
+                    }
+                }
+                if (!exists) statsDropdown.addItem(displayName);
+
+                // Auto-select yang baru dijalankan
+                statsDropdown.setSelectedItem(displayName);
+
+                updateEfficiencySummary();
+                algorithmSelector.setEnabled(true);
+            });
+
+            isAnimating = false;
         }).start();
     }
 
+    // --- ALGORITMA RUNNERS (TETAP SAMA) ---
     private boolean runBFS(Node start, Node end) {
         Queue<Node> queue = new LinkedList<>(); queue.add(start); start.visited = true;
         while (!queue.isEmpty()) {
@@ -405,5 +396,6 @@ public class MazeApp extends JFrame {
         } return -1;
     }
     private void sleepDelay(int millis) { try { Thread.sleep(millis); } catch (InterruptedException e) {} }
+
     public static void main(String[] args) { SwingUtilities.invokeLater(() -> new MazeApp().setVisible(true)); }
 }
