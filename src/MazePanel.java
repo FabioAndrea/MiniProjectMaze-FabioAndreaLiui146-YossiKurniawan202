@@ -21,27 +21,32 @@ public class MazePanel extends JPanel {
 
     public void setMazeModel(MazeGraphModel model) {
         this.mazeModel = model;
-        clearPath(); // Bersihkan visualisasi lama saat generate baru
+        clearPath();
         repaint();
     }
 
-    // Reset visualisasi
     public void clearPath() {
-        exploredNodes.clear();
-        finalPath.clear();
-        repaint();
+        // Hapus animasi lama
+        SwingUtilities.invokeLater(() -> {
+            exploredNodes.clear();
+            finalPath.clear();
+            repaint();
+        });
     }
 
-    // Method untuk menambah node yang sedang dieksplorasi (dipanggil saat animasi)
     public void addExploredNode(Node n) {
-        exploredNodes.add(n);
-        repaint();
+        // Tambah node ke list animasi (thread safe untuk UI)
+        SwingUtilities.invokeLater(() -> {
+            exploredNodes.add(n);
+            repaint();
+        });
     }
 
-    // Method untuk set jalur final
     public void setFinalPath(List<Node> path) {
-        this.finalPath = path;
-        repaint();
+        SwingUtilities.invokeLater(() -> {
+            this.finalPath = path;
+            repaint();
+        });
     }
 
     @Override
@@ -51,13 +56,17 @@ public class MazePanel extends JPanel {
         g2d.setStroke(new BasicStroke(2));
 
         // 1. Gambar Node yang sedang dieksplorasi (KUNING)
-        g2d.setColor(new Color(255, 255, 153)); // Kuning muda
+        g2d.setColor(new Color(255, 255, 153));
+        // Kita copy list agar tidak error saat iterasi (ConcurrentModificationException prevention)
+        List<Node> currentExplored;
+        synchronized(exploredNodes) { currentExplored = new ArrayList<>(exploredNodes); }
+
         for (Node n : exploredNodes) {
             g2d.fillRect(n.x * CELL_SIZE, n.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
         }
 
         // 2. Gambar Jalur Final (BIRU)
-        g2d.setColor(new Color(100, 149, 237)); // Cornflower Blue
+        g2d.setColor(new Color(100, 149, 237));
         for (Node n : finalPath) {
             g2d.fillRect(n.x * CELL_SIZE, n.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
         }
