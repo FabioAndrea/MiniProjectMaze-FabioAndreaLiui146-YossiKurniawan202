@@ -23,8 +23,11 @@ public class MazeApp extends JFrame {
     private JComboBox<String> algorithmSelector;
     private JComboBox<String> statsDropdown;
 
-    // --- LABEL STATISTIK (DITAMBAH PATH LENGTH) ---
+    // --- LABEL STATISTIK LENGKAP ---
     private JLabel lblTime, lblCost, lblVisited, lblPathLength;
+
+    // --- CHECKBOX COMPARE MODE ---
+    private JCheckBox cbCompareMode;
 
     // UI Summary & Ranking
     private JLabel lblEfficiencySummary;
@@ -48,7 +51,7 @@ public class MazeApp extends JFrame {
     private final Color JUNGLE_BTN_GREEN = new Color(34, 139, 34);
 
     public MazeApp() {
-        setTitle("Maze Solver - Complete Statistics Edition");
+        setTitle("Maze Solver - Ultimate Edition");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLayout(new BorderLayout());
 
@@ -62,7 +65,7 @@ public class MazeApp extends JFrame {
         mazeModel = new MazeGraphModel(30, 20, 0.3, 0.9);
         mazePanel = new MazePanel(mazeModel);
 
-        // --- 2. CENTER PANEL (Fixed Layout) ---
+        // --- 2. CENTER PANEL ---
         JPanel centerWrapper = new JPanel(new BorderLayout()) {
             @Override
             protected void paintComponent(Graphics g) {
@@ -89,7 +92,7 @@ public class MazeApp extends JFrame {
         add(scrollPane, BorderLayout.CENTER);
         add(rightPanel, BorderLayout.EAST);
 
-        setSize(1450, 900); // Diperbesar sedikit
+        setSize(1450, 900);
         setLocationRelativeTo(null);
     }
 
@@ -165,19 +168,19 @@ public class MazeApp extends JFrame {
             }
         });
 
-        // UPDATE GRID: Menjadi 4 baris untuk Path Length
+        // 4 Baris Statistik
         JPanel infoPanel = new JPanel(new GridLayout(4, 1, 0, 8));
         infoPanel.setBackground(JUNGLE_BG_PANEL);
         infoPanel.setBorder(new EmptyBorder(15, 0, 15, 0));
 
         lblTime = createDetailCard("⏳ Execution Time");
         lblCost = createDetailCard("💎 Total Cost");
-        lblPathLength = createDetailCard("📏 Path Length (Steps)"); // Label Baru
+        lblPathLength = createDetailCard("📏 Path Length (Steps)");
         lblVisited = createDetailCard("👣 Nodes Visited");
 
         infoPanel.add(lblTime);
         infoPanel.add(lblCost);
-        infoPanel.add(lblPathLength); // Tambah ke panel
+        infoPanel.add(lblPathLength);
         infoPanel.add(lblVisited);
 
         // --- SUMMARY & RANKING TABLE ---
@@ -191,6 +194,7 @@ public class MazeApp extends JFrame {
         lblEfficiencySummary.setForeground(JUNGLE_PARCHMENT);
         lblEfficiencySummary.setAlignmentX(Component.CENTER_ALIGNMENT);
 
+        // Tabel dengan Kolom "Steps"
         String[] columns = {"Algorithm", "Time", "Steps"};
         rankingModel = new DefaultTableModel(columns, 0) {
             @Override
@@ -235,20 +239,18 @@ public class MazeApp extends JFrame {
         statsCenter.add(lblSelect, BorderLayout.NORTH);
         statsCenter.add(statsDropdown, BorderLayout.CENTER);
         statsCenter.add(infoPanel, BorderLayout.SOUTH);
-
         statsPanel.add(statsCenter, BorderLayout.CENTER);
         statsPanel.add(summaryContainer, BorderLayout.SOUTH);
 
         // --- CONTROLS SECTION ---
-        JPanel controlsPanel = new JPanel(new GridLayout(5, 1, 0, 10));
+        JPanel controlsPanel = new JPanel(new GridLayout(6, 1, 0, 8)); // 6 Baris untuk Checkbox
         controlsPanel.setBackground(JUNGLE_BG_PANEL);
         controlsPanel.setBorder(new CompoundBorder(
                 new MatteBorder(2, 0, 0, 0, JUNGLE_WOOD_DARK),
-                new EmptyBorder(20, 0, 0, 0)
+                new EmptyBorder(15, 0, 0, 0)
         ));
 
         JButton btnGenerate = createSolidButton("Generate Map", JUNGLE_PARCHMENT, JUNGLE_TEXT_DARK);
-
         JLabel lblAlgo = new JLabel("Select Strategy:");
         lblAlgo.setForeground(Color.WHITE);
         lblAlgo.setHorizontalAlignment(SwingConstants.CENTER);
@@ -256,12 +258,20 @@ public class MazeApp extends JFrame {
         String[] algorithms = {"BFS", "DFS", "Dijkstra", "A* (A-Star)"};
         algorithmSelector = createComboBox(algorithms);
 
+        // CHECKBOX COMPARE MODE
+        cbCompareMode = new JCheckBox("Accumulate Paths (Compare)");
+        cbCompareMode.setBackground(JUNGLE_BG_PANEL);
+        cbCompareMode.setForeground(JUNGLE_PARCHMENT);
+        cbCompareMode.setFocusPainted(false);
+        cbCompareMode.setHorizontalAlignment(SwingConstants.CENTER);
+
         JButton btnSolve = createSolidButton("Start Mission", JUNGLE_BTN_GREEN, Color.WHITE);
 
         controlsPanel.add(btnGenerate);
         controlsPanel.add(lblAlgo);
         controlsPanel.add(algorithmSelector);
-        controlsPanel.add(Box.createVerticalStrut(5));
+        controlsPanel.add(cbCompareMode); // Ditambahkan
+        controlsPanel.add(Box.createVerticalStrut(2));
         controlsPanel.add(btnSolve);
 
         // Actions
@@ -374,7 +384,7 @@ public class MazeApp extends JFrame {
     private void clearInfoDisplay() {
         updateCard(lblTime, "⏳ Execution Time", "-");
         updateCard(lblCost, "💎 Total Cost", "-");
-        updateCard(lblPathLength, "📏 Path Length", "-"); // Reset Path Length
+        updateCard(lblPathLength, "📏 Path Length", "-");
         updateCard(lblVisited, "👣 Nodes Visited", "-");
     }
 
@@ -393,7 +403,6 @@ public class MazeApp extends JFrame {
         }
         updateCard(lblCost, "💎 Total Cost", costVal);
 
-        // --- UPDATE PATH LENGTH DISPLAY ---
         String stepsVal = (res.pathLength == 0 && res.totalCost >= Integer.MAX_VALUE/2) ? "-" : res.pathLength + " Steps";
         updateCard(lblPathLength, "📏 Path Length", stepsVal);
 
@@ -426,8 +435,29 @@ public class MazeApp extends JFrame {
     private void solveMaze(String algorithmCode, String displayName) {
         isAnimating = true;
         mazeModel.resetVisited();
-        mazePanel.clearPath();
+
+        // 1. Cek Mode Compare
+        boolean compareMode = cbCompareMode.isSelected();
+
+        // 2. Selalu bersihkan animasi kuning (visited)
+        mazePanel.clearExplored();
+
+        // 3. Jika TIDAK compare, baru hapus jalur-jalur lama
+        if (!compareMode) {
+            mazePanel.clearAllPaths();
+        }
+
         algorithmSelector.setEnabled(false);
+
+        // 4. Tentukan Warna Jalur (Alpha Transparan)
+        Color pathColor;
+        switch (algorithmCode) {
+            case "BFS": pathColor = new Color(0, 191, 255, 170); break; // Cyan
+            case "DFS": pathColor = new Color(255, 20, 147, 170); break; // Pink
+            case "DIJKSTRA": pathColor = new Color(255, 140, 0, 170); break; // Orange
+            case "ASTAR": pathColor = new Color(220, 20, 60, 170); break; // Merah
+            default: pathColor = new Color(255, 0, 0, 170);
+        }
 
         new Thread(() -> {
             Node start = mazeModel.getGrid()[0][0];
@@ -436,7 +466,7 @@ public class MazeApp extends JFrame {
             long startTime = System.nanoTime();
             int visitedCount = 0;
             int finalCost = Integer.MAX_VALUE;
-            int finalSteps = 0; // Variable untuk Steps
+            int finalSteps = 0;
 
             if (algorithmCode.equals("BFS")) found = runBFS(start, end);
             else if (algorithmCode.equals("DFS")) found = runDFS(start, end);
@@ -455,8 +485,10 @@ public class MazeApp extends JFrame {
                     current = current.parent;
                 }
                 finalCost = calcCost;
-                finalSteps = path.size(); // Hitung jumlah langkah
-                mazePanel.setFinalPath(path);
+                finalSteps = path.size();
+
+                // 5. Gunakan addFinalPath (Bukan setFinalPath)
+                mazePanel.addFinalPath(displayName, path, pathColor);
             }
 
             for(int x=0; x<mazeModel.getCols(); x++) {
@@ -465,7 +497,6 @@ public class MazeApp extends JFrame {
                 }
             }
 
-            // --- PASS PATH LENGTH KE ALGORESULT ---
             AlgoResult res = new AlgoResult(displayName, endTime - startTime, finalSteps, visitedCount, found ? finalCost : Integer.MAX_VALUE);
 
             SwingUtilities.invokeLater(() -> {
