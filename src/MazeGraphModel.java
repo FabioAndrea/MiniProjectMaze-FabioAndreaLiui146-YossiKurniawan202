@@ -7,9 +7,11 @@ public class MazeGraphModel {
     private final int rows;
     private Node[][] grid;
     private final Random random;
-
-    // Persentase dinding tambahan yang dihancurkan untuk membuat loop
     private static final double EXTRA_PATHS_PERCENTAGE = 0.1;
+
+    // Persentase area yang akan tertutup rintangan (Rumput/Air/Lumpur)
+    // Sisanya (60%) akan transparan (Terrace) agar background terlihat
+    private static final double OBSTACLE_DENSITY = 0.4;
 
     public MazeGraphModel(int cols, int rows) {
         this.cols = cols;
@@ -28,6 +30,20 @@ public class MazeGraphModel {
         for (int x = 0; x < cols; x++) {
             for (int y = 0; y < rows; y++) {
                 grid[x][y] = new Node(x, y);
+
+                // LOGIKA BARU:
+                // Secara default, set ke TERRACE (Transparan)
+                grid[x][y].terrain = TerrainType.TERRACE;
+
+                // Acak: Hanya 40% kemungkinan menjadi rintangan (Grass/Mud/Water)
+                if (random.nextDouble() < OBSTACLE_DENSITY) {
+                    grid[x][y].terrain = TerrainType.getRandomObstacle();
+                }
+
+                // Start & End wajib aman (Terrace)
+                if ((x == 0 && y == 0) || (x == cols - 1 && y == rows - 1)) {
+                    grid[x][y].terrain = TerrainType.TERRACE;
+                }
             }
         }
     }
@@ -37,10 +53,8 @@ public class MazeGraphModel {
         List<Edge> walls = new ArrayList<>();
         Node startNode = grid[0][0];
         startNode.visited = true;
-
         addNeighborsToWalls(startNode, walls);
 
-        // 1. Prim's Algorithm
         while (!walls.isEmpty()) {
             int randomIndex = random.nextInt(walls.size());
             Edge currentEdge = walls.remove(randomIndex);
@@ -54,15 +68,10 @@ public class MazeGraphModel {
                 addNeighborsToWalls(v, walls);
             }
         }
-
-        // 2. Tambahkan Loop (Multiple Paths)
         addExtraPaths();
-
-        // 3. Reset status visited agar siap dipakai solver (BFS/DFS)
         resetVisited();
     }
 
-    // Method PENTING: Membersihkan maze dari bekas kunjungan algoritma sebelumnya
     public void resetVisited() {
         for (int x = 0; x < cols; x++) {
             for (int y = 0; y < rows; y++) {
@@ -77,7 +86,6 @@ public class MazeGraphModel {
         for (int[] dir : directions) {
             int nx = node.x + dir[0];
             int ny = node.y + dir[1];
-
             if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
                 Node neighbor = grid[nx][ny];
                 if (!neighbor.visited) {
@@ -96,12 +104,10 @@ public class MazeGraphModel {
             int x = random.nextInt(cols);
             int y = random.nextInt(rows);
             Node nodeA = grid[x][y];
-
             for (int attempt = 0; attempt < 10; attempt++) {
                 int[] dir = directions[random.nextInt(directions.length)];
                 int nx = x + dir[0];
                 int ny = y + dir[1];
-
                 if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
                     Node nodeB = grid[nx][ny];
                     if (!nodeA.neighbors.contains(nodeB)) {

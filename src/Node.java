@@ -4,8 +4,9 @@ import java.util.List;
 public class Node {
     int x, y;
     boolean visited;
-    Node parent; // Field baru: Untuk menyimpan jejak (backtracking) jalur solusi
+    Node parent;
     List<Node> neighbors;
+    TerrainType terrain;
 
     public Node(int x, int y) {
         this.x = x;
@@ -13,5 +14,10 @@ public class Node {
         this.visited = false;
         this.parent = null;
         this.neighbors = new ArrayList<>();
+        this.terrain = TerrainType.TERRACE;
+    }
+
+    public int getCost() {
+        return terrain.getCost();
     }
 }
