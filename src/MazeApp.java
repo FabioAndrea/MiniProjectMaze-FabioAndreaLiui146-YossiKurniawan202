@@ -23,13 +23,13 @@ public class MazeApp extends JFrame {
     private JComboBox<String> algorithmSelector;
     private JComboBox<String> statsDropdown;
 
-    // --- LABEL STATISTIK LENGKAP ---
+    // Stats Labels
     private JLabel lblTime, lblCost, lblVisited, lblPathLength;
 
-    // --- CHECKBOX COMPARE MODE ---
+    // Compare Mode Checkbox
     private JCheckBox cbCompareMode;
 
-    // UI Summary & Ranking
+    // Summary & Ranking
     private JLabel lblEfficiencySummary;
     private JTable rankingTable;
     private DefaultTableModel rankingModel;
@@ -38,8 +38,8 @@ public class MazeApp extends JFrame {
     private JComboBox<String> cbMapSize;
     private JComboBox<String> cbTerrainDensity;
     private JComboBox<String> cbWallDensity;
+    private JComboBox<String> cbGenAlgo; // DROPDOWN BARU UNTUK PRIMS/KRUSKAL
 
-    // Data History
     private Map<String, AlgoResult> runHistory = new LinkedHashMap<>();
 
     // Colors Theme
@@ -62,7 +62,8 @@ public class MazeApp extends JFrame {
         }
 
         // --- 1. SETUP DEFAULT MODEL ---
-        mazeModel = new MazeGraphModel(30, 20, 0.3, 0.9);
+        // Default pakai Prim's
+        mazeModel = new MazeGraphModel(30, 20, 0.3, 0.9, "Prim's");
         mazePanel = new MazePanel(mazeModel);
 
         // --- 2. CENTER PANEL ---
@@ -112,34 +113,43 @@ public class MazeApp extends JFrame {
         lblTitle.setForeground(JUNGLE_ACCENT_GOLD);
         lblTitle.setAlignmentX(Component.CENTER_ALIGNMENT);
 
+        // -- KOMPONEN SETUP --
         JLabel lblSize = createLabel("Map Size:");
-        String[] sizes = {"Small", "Medium", "Large"};
-        cbMapSize = createComboBox(sizes);
+        cbMapSize = createComboBox(new String[]{"Small", "Medium", "Large"});
         cbMapSize.setSelectedIndex(1);
 
+        JLabel lblGenAlgo = createLabel("Generation Algo:"); // LABEL BARU
+        cbGenAlgo = createComboBox(new String[]{"Prim's Algorithm", "Kruskal's Algorithm"}); // PILIHAN BARU
+
         JLabel lblTerrain = createLabel("Terrain Obstacles:");
-        String[] terrains = {"Clean", "Light", "Heavy"};
-        cbTerrainDensity = createComboBox(terrains);
+        cbTerrainDensity = createComboBox(new String[]{"Clean", "Light", "Heavy"});
         cbTerrainDensity.setSelectedIndex(1);
 
         JLabel lblWall = createLabel("Wall Structure:");
-        String[] walls = {"High", "Medium", "Low"};
-        cbWallDensity = createComboBox(walls);
+        cbWallDensity = createComboBox(new String[]{"High", "Medium", "Low"});
         cbWallDensity.setSelectedIndex(0);
 
+        // Add to Panel
         panel.add(lblTitle);
-        panel.add(Box.createVerticalStrut(25));
+        panel.add(Box.createVerticalStrut(20));
+
         panel.add(lblSize); panel.add(Box.createVerticalStrut(5)); panel.add(cbMapSize);
         panel.add(Box.createVerticalStrut(15));
+
+        panel.add(lblGenAlgo); panel.add(Box.createVerticalStrut(5)); panel.add(cbGenAlgo); // Add Algo Selector
+        panel.add(Box.createVerticalStrut(15));
+
         panel.add(lblTerrain); panel.add(Box.createVerticalStrut(5)); panel.add(cbTerrainDensity);
         panel.add(Box.createVerticalStrut(15));
+
         panel.add(lblWall); panel.add(Box.createVerticalStrut(5)); panel.add(cbWallDensity);
+
         panel.add(Box.createVerticalGlue());
 
         return panel;
     }
 
-    // --- PANEL KANAN: STATS + CONTROLS ---
+    // --- PANEL KANAN: STATS + CONTROLS (TIDAK BERUBAH BANYAK) ---
     private JPanel createRightPanel() {
         JPanel mainPanel = new JPanel(new BorderLayout());
         mainPanel.setPreferredSize(new Dimension(320, 0));
@@ -149,10 +159,11 @@ public class MazeApp extends JFrame {
                 new EmptyBorder(10, 15, 10, 15)
         ));
 
-        // --- STATS SECTION ---
+        // ... (Bagian Statistik dan Tabel Ranking SAMA PERSIS dengan sebelumnya) ...
+        // Untuk mempersingkat, saya menggunakan logika yang sama.
+
         JPanel statsPanel = new JPanel(new BorderLayout());
         statsPanel.setBackground(JUNGLE_BG_PANEL);
-
         JLabel lblTitleStats = new JLabel("JOURNAL", JLabel.CENTER);
         lblTitleStats.setFont(new Font("Georgia", Font.BOLD, 18));
         lblTitleStats.setForeground(JUNGLE_ACCENT_GOLD);
@@ -163,44 +174,31 @@ public class MazeApp extends JFrame {
         statsDropdown = createComboBox(new String[]{});
         statsDropdown.addActionListener(e -> {
             String selectedAlgo = (String) statsDropdown.getSelectedItem();
-            if (selectedAlgo != null && runHistory.containsKey(selectedAlgo)) {
-                showAlgoDetails(runHistory.get(selectedAlgo));
-            }
+            if (selectedAlgo != null && runHistory.containsKey(selectedAlgo)) showAlgoDetails(runHistory.get(selectedAlgo));
         });
 
-        // 4 Baris Statistik
         JPanel infoPanel = new JPanel(new GridLayout(4, 1, 0, 8));
         infoPanel.setBackground(JUNGLE_BG_PANEL);
         infoPanel.setBorder(new EmptyBorder(15, 0, 15, 0));
-
         lblTime = createDetailCard("⏳ Execution Time");
         lblCost = createDetailCard("💎 Total Cost");
         lblPathLength = createDetailCard("📏 Path Length (Steps)");
         lblVisited = createDetailCard("👣 Nodes Visited");
+        infoPanel.add(lblTime); infoPanel.add(lblCost); infoPanel.add(lblPathLength); infoPanel.add(lblVisited);
 
-        infoPanel.add(lblTime);
-        infoPanel.add(lblCost);
-        infoPanel.add(lblPathLength);
-        infoPanel.add(lblVisited);
-
-        // --- SUMMARY & RANKING TABLE ---
         JPanel summaryContainer = new JPanel();
         summaryContainer.setLayout(new BoxLayout(summaryContainer, BoxLayout.Y_AXIS));
         summaryContainer.setBackground(JUNGLE_BG_PANEL);
         summaryContainer.setBorder(new EmptyBorder(10, 0, 0, 0));
-
         lblEfficiencySummary = new JLabel("<html><center>No Data.</center></html>", JLabel.CENTER);
         lblEfficiencySummary.setFont(new Font("Georgia", Font.ITALIC, 13));
         lblEfficiencySummary.setForeground(JUNGLE_PARCHMENT);
         lblEfficiencySummary.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        // Tabel dengan Kolom "Steps"
         String[] columns = {"Algorithm", "Time", "Steps"};
         rankingModel = new DefaultTableModel(columns, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) { return false; }
+            @Override public boolean isCellEditable(int row, int column) { return false; }
         };
-
         rankingTable = new JTable(rankingModel);
         rankingTable.setRowHeight(25);
         rankingTable.setShowVerticalLines(false);
@@ -214,143 +212,51 @@ public class MazeApp extends JFrame {
         header.setBackground(JUNGLE_WOOD_DARK);
         header.setForeground(JUNGLE_ACCENT_GOLD);
         header.setFont(new Font("Georgia", Font.BOLD, 12));
-
         DefaultTableCellRenderer centerRenderer = new DefaultTableCellRenderer();
         centerRenderer.setHorizontalAlignment(JLabel.CENTER);
         centerRenderer.setBackground(JUNGLE_BG_PANEL);
         centerRenderer.setForeground(JUNGLE_PARCHMENT);
-
-        for (int i = 0; i < rankingTable.getColumnCount(); i++) {
-            rankingTable.getColumnModel().getColumn(i).setCellRenderer(centerRenderer);
-        }
+        for (int i = 0; i < rankingTable.getColumnCount(); i++) rankingTable.getColumnModel().getColumn(i).setCellRenderer(centerRenderer);
 
         JScrollPane tableScroll = new JScrollPane(rankingTable);
         tableScroll.setPreferredSize(new Dimension(250, 100));
         tableScroll.setBorder(new LineBorder(JUNGLE_WOOD_DARK, 1));
         tableScroll.getViewport().setBackground(JUNGLE_BG_PANEL);
-
-        summaryContainer.add(lblEfficiencySummary);
-        summaryContainer.add(Box.createVerticalStrut(10));
-        summaryContainer.add(tableScroll);
+        summaryContainer.add(lblEfficiencySummary); summaryContainer.add(Box.createVerticalStrut(10)); summaryContainer.add(tableScroll);
 
         statsPanel.add(lblTitleStats, BorderLayout.NORTH);
         JPanel statsCenter = new JPanel(new BorderLayout());
         statsCenter.setBackground(JUNGLE_BG_PANEL);
-        statsCenter.add(lblSelect, BorderLayout.NORTH);
-        statsCenter.add(statsDropdown, BorderLayout.CENTER);
-        statsCenter.add(infoPanel, BorderLayout.SOUTH);
-        statsPanel.add(statsCenter, BorderLayout.CENTER);
-        statsPanel.add(summaryContainer, BorderLayout.SOUTH);
+        statsCenter.add(lblSelect, BorderLayout.NORTH); statsCenter.add(statsDropdown, BorderLayout.CENTER); statsCenter.add(infoPanel, BorderLayout.SOUTH);
+        statsPanel.add(statsCenter, BorderLayout.CENTER); statsPanel.add(summaryContainer, BorderLayout.SOUTH);
 
-        // --- CONTROLS SECTION ---
-        JPanel controlsPanel = new JPanel(new GridLayout(6, 1, 0, 8)); // 6 Baris untuk Checkbox
+        // CONTROLS
+        JPanel controlsPanel = new JPanel(new GridLayout(6, 1, 0, 8));
         controlsPanel.setBackground(JUNGLE_BG_PANEL);
-        controlsPanel.setBorder(new CompoundBorder(
-                new MatteBorder(2, 0, 0, 0, JUNGLE_WOOD_DARK),
-                new EmptyBorder(15, 0, 0, 0)
-        ));
+        controlsPanel.setBorder(new CompoundBorder(new MatteBorder(2, 0, 0, 0, JUNGLE_WOOD_DARK), new EmptyBorder(15, 0, 0, 0)));
 
         JButton btnGenerate = createSolidButton("Generate Map", JUNGLE_PARCHMENT, JUNGLE_TEXT_DARK);
         JLabel lblAlgo = new JLabel("Select Strategy:");
-        lblAlgo.setForeground(Color.WHITE);
-        lblAlgo.setHorizontalAlignment(SwingConstants.CENTER);
-
-        String[] algorithms = {"BFS", "DFS", "Dijkstra", "A* (A-Star)"};
-        algorithmSelector = createComboBox(algorithms);
-
-        // CHECKBOX COMPARE MODE
+        lblAlgo.setForeground(Color.WHITE); lblAlgo.setHorizontalAlignment(SwingConstants.CENTER);
+        algorithmSelector = createComboBox(new String[]{"BFS", "DFS", "Dijkstra", "A* (A-Star)"});
         cbCompareMode = new JCheckBox("Accumulate Paths (Compare)");
-        cbCompareMode.setBackground(JUNGLE_BG_PANEL);
-        cbCompareMode.setForeground(JUNGLE_PARCHMENT);
-        cbCompareMode.setFocusPainted(false);
-        cbCompareMode.setHorizontalAlignment(SwingConstants.CENTER);
-
+        cbCompareMode.setBackground(JUNGLE_BG_PANEL); cbCompareMode.setForeground(JUNGLE_PARCHMENT); cbCompareMode.setFocusPainted(false); cbCompareMode.setHorizontalAlignment(SwingConstants.CENTER);
         JButton btnSolve = createSolidButton("Start Mission", JUNGLE_BTN_GREEN, Color.WHITE);
 
-        controlsPanel.add(btnGenerate);
-        controlsPanel.add(lblAlgo);
-        controlsPanel.add(algorithmSelector);
-        controlsPanel.add(cbCompareMode); // Ditambahkan
-        controlsPanel.add(Box.createVerticalStrut(2));
-        controlsPanel.add(btnSolve);
+        controlsPanel.add(btnGenerate); controlsPanel.add(lblAlgo); controlsPanel.add(algorithmSelector); controlsPanel.add(cbCompareMode); controlsPanel.add(Box.createVerticalStrut(2)); controlsPanel.add(btnSolve);
 
-        // Actions
-        btnGenerate.addActionListener(e -> {
-            if (isAnimating) return;
-            handleGenerateMap();
-        });
-
+        btnGenerate.addActionListener(e -> { if (!isAnimating) handleGenerateMap(); });
         btnSolve.addActionListener(e -> {
             if (isAnimating) return;
             String selected = (String) algorithmSelector.getSelectedItem();
             String code = "BFS";
-            if (selected.equals("DFS")) code = "DFS";
-            else if (selected.equals("Dijkstra")) code = "DIJKSTRA";
-            else if (selected.contains("A*")) code = "ASTAR";
+            if (selected.equals("DFS")) code = "DFS"; else if (selected.equals("Dijkstra")) code = "DIJKSTRA"; else if (selected.contains("A*")) code = "ASTAR";
             solveMaze(code, selected);
         });
 
         mainPanel.add(statsPanel, BorderLayout.NORTH);
         mainPanel.add(controlsPanel, BorderLayout.SOUTH);
-
         return mainPanel;
-    }
-
-    // --- UI HELPER METHODS ---
-    private JLabel createLabel(String text) {
-        JLabel lbl = new JLabel(text);
-        lbl.setForeground(Color.WHITE);
-        lbl.setFont(new Font("SansSerif", Font.PLAIN, 12));
-        lbl.setAlignmentX(Component.LEFT_ALIGNMENT);
-        return lbl;
-    }
-
-    private JComboBox<String> createComboBox(String[] items) {
-        JComboBox<String> cb = new JComboBox<>(items);
-        cb.setFont(new Font("SansSerif", Font.PLAIN, 13));
-        cb.setBackground(JUNGLE_PARCHMENT);
-        cb.setForeground(JUNGLE_TEXT_DARK);
-        cb.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
-        cb.setAlignmentX(Component.LEFT_ALIGNMENT);
-        return cb;
-    }
-
-    private JButton createSolidButton(String text, Color bgColor, Color textColor) {
-        JButton btn = new JButton(text) {
-            @Override
-            protected void paintComponent(Graphics g) {
-                Graphics2D g2 = (Graphics2D) g.create();
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                if (getModel().isPressed()) g2.setColor(bgColor.darker());
-                else if (getModel().isRollover()) g2.setColor(bgColor.brighter());
-                else g2.setColor(bgColor);
-                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
-                g2.setColor(bgColor.darker().darker());
-                g2.setStroke(new BasicStroke(2));
-                g2.drawRoundRect(0, 0, getWidth()-1, getHeight()-1, 10, 10);
-                g2.dispose();
-                super.paintComponent(g);
-            }
-        };
-        btn.setFont(new Font("Georgia", Font.BOLD, 14));
-        btn.setForeground(textColor);
-        btn.setFocusPainted(false);
-        btn.setContentAreaFilled(false);
-        btn.setBorderPainted(false);
-        btn.setOpaque(false);
-        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        return btn;
-    }
-
-    private JLabel createDetailCard(String title) {
-        JLabel lbl = new JLabel("<html><div style='text-align:center;'><b>" + title + "</b><br><font size='4'>-</font></div></html>", JLabel.CENTER);
-        lbl.setOpaque(true);
-        lbl.setBackground(JUNGLE_PARCHMENT);
-        lbl.setForeground(JUNGLE_TEXT_DARK);
-        lbl.setFont(new Font("Georgia", Font.PLAIN, 12));
-        lbl.setBorder(new LineBorder(JUNGLE_WOOD_DARK, 1, true));
-        lbl.setPreferredSize(new Dimension(0, 45));
-        return lbl;
     }
 
     // --- LOGIC METHODS ---
@@ -371,16 +277,71 @@ public class MazeApp extends JFrame {
         else if (wallSel.contains("Medium")) wallDens = 0.7;
         else if (wallSel.contains("Low")) wallDens = 0.4;
 
-        mazeModel = new MazeGraphModel(cols, rows, terrainProb, wallDens);
+        // AMBIL ALGORITMA GENERASI
+        String genAlgoSel = (String) cbGenAlgo.getSelectedItem();
+        String genCode = genAlgoSel.contains("Kruskal") ? "Kruskal's" : "Prim's";
+
+        mazeModel = new MazeGraphModel(cols, rows, terrainProb, wallDens, genCode);
         mazePanel.setMazeModel(mazeModel);
 
         runHistory.clear();
         statsDropdown.removeAllItems();
         clearInfoDisplay();
-        lblEfficiencySummary.setText("<html><center>Map Generated!<br>Terrain: " + terrSel + "<br>Walls: " + wallSel + "</center></html>");
+        lblEfficiencySummary.setText("<html><center>Map Generated!<br>Algo: " + genCode + "<br>Walls: " + wallSel + "</center></html>");
         rankingModel.setRowCount(0);
     }
 
+    // --- HELPER METHODS (CreateLabel, ComboBox, etc.) TETAP SAMA ---
+    // (Agar kode tidak terlalu panjang, saya asumsikan helper methods
+    // createLabel, createComboBox, createSolidButton, createDetailCard,
+    // updateCard, clearInfoDisplay, showAlgoDetails, updateEfficiencySummary,
+    // solveMaze, runBFS, runDFS, runDijkstra, runAStar, sleepDelay
+    // ADALAH SAMA PERSIS dengan kode di jawaban sebelumnya).
+
+    // Pastikan Anda menyalin method-method helper tersebut dari jawaban "MazeApp.java (Gabungan Final)" sebelumnya.
+
+    // --- COPY PASTE HELPER METHODS DARI JAWABAN SEBELUMNYA DI SINI ---
+    // ... (createLabel, createComboBox, createSolidButton, dll) ...
+    // ... (solveMaze, algoritma BFS, DFS, dll) ...
+
+    // Untuk kenyamanan, berikut adalah ulang sebagian kecil helper penting:
+    private JLabel createLabel(String text) {
+        JLabel lbl = new JLabel(text);
+        lbl.setForeground(Color.WHITE);
+        lbl.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        lbl.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return lbl;
+    }
+    private JComboBox<String> createComboBox(String[] items) {
+        JComboBox<String> cb = new JComboBox<>(items);
+        cb.setFont(new Font("SansSerif", Font.PLAIN, 13));
+        cb.setBackground(JUNGLE_PARCHMENT);
+        cb.setForeground(JUNGLE_TEXT_DARK);
+        cb.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
+        cb.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return cb;
+    }
+    private JButton createSolidButton(String text, Color bgColor, Color textColor) {
+        JButton btn = new JButton(text) {
+            @Override protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                if (getModel().isPressed()) g2.setColor(bgColor.darker());
+                else if (getModel().isRollover()) g2.setColor(bgColor.brighter());
+                else g2.setColor(bgColor);
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
+                g2.setColor(bgColor.darker().darker());
+                g2.setStroke(new BasicStroke(2));
+                g2.drawRoundRect(0, 0, getWidth()-1, getHeight()-1, 10, 10);
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+        btn.setFont(new Font("Georgia", Font.BOLD, 14)); btn.setForeground(textColor); btn.setFocusPainted(false); btn.setContentAreaFilled(false); btn.setBorderPainted(false); btn.setOpaque(false); btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        return btn;
+    }
+
+    // (JANGAN LUPA: Masukkan kembali method solveMaze, runBFS, runDFS, dll. dari kode sebelumnya)
     private void clearInfoDisplay() {
         updateCard(lblTime, "⏳ Execution Time", "-");
         updateCard(lblCost, "💎 Total Cost", "-");
@@ -394,18 +355,10 @@ public class MazeApp extends JFrame {
 
     private void showAlgoDetails(AlgoResult res) {
         updateCard(lblTime, "⏳ Execution Time", String.format("%.2f ms", res.getDurationMs()));
-
-        String costVal;
-        if (res.algorithmName.equals("BFS") || res.algorithmName.equals("DFS")) {
-            costVal = "-";
-        } else {
-            costVal = (res.totalCost >= Integer.MAX_VALUE/2) ? "Fail" : String.valueOf(res.totalCost);
-        }
+        String costVal = (res.algorithmName.equals("BFS") || res.algorithmName.equals("DFS")) ? "-" : ((res.totalCost >= Integer.MAX_VALUE/2) ? "Fail" : String.valueOf(res.totalCost));
         updateCard(lblCost, "💎 Total Cost", costVal);
-
         String stepsVal = (res.pathLength == 0 && res.totalCost >= Integer.MAX_VALUE/2) ? "-" : res.pathLength + " Steps";
         updateCard(lblPathLength, "📏 Path Length", stepsVal);
-
         updateCard(lblVisited, "👣 Nodes Visited", String.valueOf(res.visitedCount));
     }
 
@@ -433,29 +386,18 @@ public class MazeApp extends JFrame {
     }
 
     private void solveMaze(String algorithmCode, String displayName) {
-        isAnimating = true;
-        mazeModel.resetVisited();
-
-        // 1. Cek Mode Compare
+        isAnimating = true; mazeModel.resetVisited();
         boolean compareMode = cbCompareMode.isSelected();
-
-        // 2. Selalu bersihkan animasi kuning (visited)
         mazePanel.clearExplored();
-
-        // 3. Jika TIDAK compare, baru hapus jalur-jalur lama
-        if (!compareMode) {
-            mazePanel.clearAllPaths();
-        }
-
+        if (!compareMode) mazePanel.clearAllPaths();
         algorithmSelector.setEnabled(false);
 
-        // 4. Tentukan Warna Jalur (Alpha Transparan)
         Color pathColor;
         switch (algorithmCode) {
-            case "BFS": pathColor = new Color(0, 191, 255, 170); break; // Cyan
-            case "DFS": pathColor = new Color(255, 20, 147, 170); break; // Pink
-            case "DIJKSTRA": pathColor = new Color(255, 140, 0, 170); break; // Orange
-            case "ASTAR": pathColor = new Color(220, 20, 60, 170); break; // Merah
+            case "BFS": pathColor = new Color(0, 191, 255, 170); break;
+            case "DFS": pathColor = new Color(255, 20, 147, 170); break;
+            case "DIJKSTRA": pathColor = new Color(255, 140, 0, 170); break;
+            case "ASTAR": pathColor = new Color(220, 20, 60, 170); break;
             default: pathColor = new Color(255, 0, 0, 170);
         }
 
@@ -464,9 +406,7 @@ public class MazeApp extends JFrame {
             Node end = mazeModel.getGrid()[mazeModel.getCols() - 1][mazeModel.getRows() - 1];
             boolean found = false;
             long startTime = System.nanoTime();
-            int visitedCount = 0;
-            int finalCost = Integer.MAX_VALUE;
-            int finalSteps = 0;
+            int visitedCount = 0; int finalCost = Integer.MAX_VALUE; int finalSteps = 0;
 
             if (algorithmCode.equals("BFS")) found = runBFS(start, end);
             else if (algorithmCode.equals("DFS")) found = runDFS(start, end);
@@ -479,32 +419,18 @@ public class MazeApp extends JFrame {
                 List<Node> path = new ArrayList<>();
                 Node current = end;
                 int calcCost = 0;
-                while (current != null) {
-                    path.add(current);
-                    calcCost += current.getCost();
-                    current = current.parent;
-                }
-                finalCost = calcCost;
-                finalSteps = path.size();
-
-                // 5. Gunakan addFinalPath (Bukan setFinalPath)
+                while (current != null) { path.add(current); calcCost += current.getCost(); current = current.parent; }
+                finalCost = calcCost; finalSteps = path.size();
                 mazePanel.addFinalPath(displayName, path, pathColor);
             }
 
-            for(int x=0; x<mazeModel.getCols(); x++) {
-                for(int y=0; y<mazeModel.getRows(); y++) {
-                    if(mazeModel.getGrid()[x][y].visited) visitedCount++;
-                }
-            }
+            for(int x=0; x<mazeModel.getCols(); x++) for(int y=0; y<mazeModel.getRows(); y++) if(mazeModel.getGrid()[x][y].visited) visitedCount++;
 
             AlgoResult res = new AlgoResult(displayName, endTime - startTime, finalSteps, visitedCount, found ? finalCost : Integer.MAX_VALUE);
-
             SwingUtilities.invokeLater(() -> {
                 runHistory.put(displayName, res);
                 boolean exists = false;
-                for (int i = 0; i < statsDropdown.getItemCount(); i++) {
-                    if (statsDropdown.getItemAt(i).equals(displayName)) { exists = true; break; }
-                }
+                for (int i = 0; i < statsDropdown.getItemCount(); i++) if (statsDropdown.getItemAt(i).equals(displayName)) { exists = true; break; }
                 if (!exists) statsDropdown.addItem(displayName);
                 statsDropdown.setSelectedItem(displayName);
                 updateEfficiencySummary();
@@ -514,54 +440,18 @@ public class MazeApp extends JFrame {
         }).start();
     }
 
-    // --- ALGORITHMS ---
-    private boolean runBFS(Node start, Node end) {
-        Queue<Node> queue = new LinkedList<>(); queue.add(start); start.visited = true;
-        while (!queue.isEmpty()) {
-            Node current = queue.poll(); mazePanel.addExploredNode(current); sleepDelay(5);
-            if (current == end) return true;
-            for (Node neighbor : current.neighbors) { if (!neighbor.visited) { neighbor.visited = true; neighbor.parent = current; queue.add(neighbor); }}
-        } return false;
+    private JLabel createDetailCard(String title) {
+        JLabel lbl = new JLabel("<html><div style='text-align:center;'><b>" + title + "</b><br><font size='4'>-</font></div></html>", JLabel.CENTER);
+        lbl.setOpaque(true); lbl.setBackground(JUNGLE_PARCHMENT); lbl.setForeground(JUNGLE_TEXT_DARK); lbl.setFont(new Font("Georgia", Font.PLAIN, 12)); lbl.setBorder(new LineBorder(JUNGLE_WOOD_DARK, 1, true)); lbl.setPreferredSize(new Dimension(0, 45)); return lbl;
     }
-    private boolean runDFS(Node start, Node end) {
-        Stack<Node> stack = new Stack<>(); stack.push(start); start.visited = true;
-        while (!stack.isEmpty()) {
-            Node current = stack.pop(); mazePanel.addExploredNode(current); sleepDelay(5);
-            if (current == end) return true;
-            for (Node neighbor : current.neighbors) { if (!neighbor.visited) { neighbor.visited = true; neighbor.parent = current; stack.push(neighbor); }}
-        } return false;
-    }
-    private int runDijkstra(Node start, Node end) {
-        PriorityQueue<PathState> pq = new PriorityQueue<>(); Map<Node, Integer> dist = new HashMap<>();
-        dist.put(start, 0); pq.add(new PathState(start, 0));
-        while (!pq.isEmpty()) {
-            PathState current = pq.poll(); Node u = current.node;
-            if (current.cost > dist.getOrDefault(u, Integer.MAX_VALUE)) continue;
-            u.visited = true; mazePanel.addExploredNode(u); sleepDelay(5);
-            if (u == end) return current.cost;
-            for (Node v : u.neighbors) {
-                int newDist = current.cost + v.getCost();
-                if (newDist < dist.getOrDefault(v, Integer.MAX_VALUE)) { dist.put(v, newDist); v.parent = u; pq.add(new PathState(v, newDist)); }
-            }
-        } return -1;
-    }
-    private int runAStar(Node start, Node end) {
-        PriorityQueue<AStarState> pq = new PriorityQueue<>(); Map<Node, Integer> gScore = new HashMap<>();
-        gScore.put(start, 0); pq.add(new AStarState(start, 0, Math.abs(start.x-end.x) + Math.abs(start.y-end.y)));
-        while (!pq.isEmpty()) {
-            AStarState current = pq.poll(); Node u = current.node;
-            if (current.gCost > gScore.getOrDefault(u, Integer.MAX_VALUE)) continue;
-            u.visited = true; mazePanel.addExploredNode(u); sleepDelay(5);
-            if (u == end) return current.gCost;
-            for (Node v : u.neighbors) {
-                int newG = current.gCost + v.getCost();
-                if (newG < gScore.getOrDefault(v, Integer.MAX_VALUE)) {
-                    gScore.put(v, newG); v.parent = u; pq.add(new AStarState(v, newG, Math.abs(v.x-end.x) + Math.abs(v.y-end.y)));
-                }
-            }
-        } return -1;
-    }
+
     private void sleepDelay(int millis) { try { Thread.sleep(millis); } catch (InterruptedException e) {} }
+
+    // ALGORITMA RUNNERS
+    private boolean runBFS(Node start, Node end) { Queue<Node> queue = new LinkedList<>(); queue.add(start); start.visited = true; while (!queue.isEmpty()) { Node current = queue.poll(); mazePanel.addExploredNode(current); sleepDelay(5); if (current == end) return true; for (Node neighbor : current.neighbors) { if (!neighbor.visited) { neighbor.visited = true; neighbor.parent = current; queue.add(neighbor); }} } return false; }
+    private boolean runDFS(Node start, Node end) { Stack<Node> stack = new Stack<>(); stack.push(start); start.visited = true; while (!stack.isEmpty()) { Node current = stack.pop(); mazePanel.addExploredNode(current); sleepDelay(5); if (current == end) return true; for (Node neighbor : current.neighbors) { if (!neighbor.visited) { neighbor.visited = true; neighbor.parent = current; stack.push(neighbor); }} } return false; }
+    private int runDijkstra(Node start, Node end) { PriorityQueue<PathState> pq = new PriorityQueue<>(); Map<Node, Integer> dist = new HashMap<>(); dist.put(start, 0); pq.add(new PathState(start, 0)); while (!pq.isEmpty()) { PathState current = pq.poll(); Node u = current.node; if (current.cost > dist.getOrDefault(u, Integer.MAX_VALUE)) continue; u.visited = true; mazePanel.addExploredNode(u); sleepDelay(5); if (u == end) return current.cost; for (Node v : u.neighbors) { int newDist = current.cost + v.getCost(); if (newDist < dist.getOrDefault(v, Integer.MAX_VALUE)) { dist.put(v, newDist); v.parent = u; pq.add(new PathState(v, newDist)); } } } return -1; }
+    private int runAStar(Node start, Node end) { PriorityQueue<AStarState> pq = new PriorityQueue<>(); Map<Node, Integer> gScore = new HashMap<>(); gScore.put(start, 0); pq.add(new AStarState(start, 0, Math.abs(start.x-end.x) + Math.abs(start.y-end.y))); while (!pq.isEmpty()) { AStarState current = pq.poll(); Node u = current.node; if (current.gCost > gScore.getOrDefault(u, Integer.MAX_VALUE)) continue; u.visited = true; mazePanel.addExploredNode(u); sleepDelay(5); if (u == end) return current.gCost; for (Node v : u.neighbors) { int newG = current.gCost + v.getCost(); if (newG < gScore.getOrDefault(v, Integer.MAX_VALUE)) { gScore.put(v, newG); v.parent = u; pq.add(new AStarState(v, newG, Math.abs(v.x-end.x) + Math.abs(v.y-end.y))); } } } return -1; }
 
     public static void main(String[] args) { SwingUtilities.invokeLater(() -> new MazeApp().setVisible(true)); }
 }
