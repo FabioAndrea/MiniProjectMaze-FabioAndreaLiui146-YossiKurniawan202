@@ -22,7 +22,9 @@ public class MazeApp extends JFrame {
     // UI Components Kanan
     private JComboBox<String> algorithmSelector;
     private JComboBox<String> statsDropdown;
-    private JLabel lblTime, lblCost, lblVisited;
+
+    // --- LABEL STATISTIK (DITAMBAH PATH LENGTH) ---
+    private JLabel lblTime, lblCost, lblVisited, lblPathLength;
 
     // UI Summary & Ranking
     private JLabel lblEfficiencySummary;
@@ -46,7 +48,7 @@ public class MazeApp extends JFrame {
     private final Color JUNGLE_BTN_GREEN = new Color(34, 139, 34);
 
     public MazeApp() {
-        setTitle("Maze Solver - Jungle Expedition");
+        setTitle("Maze Solver - Complete Statistics Edition");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLayout(new BorderLayout());
 
@@ -87,7 +89,7 @@ public class MazeApp extends JFrame {
         add(scrollPane, BorderLayout.CENTER);
         add(rightPanel, BorderLayout.EAST);
 
-        setSize(1400, 850);
+        setSize(1450, 900); // Diperbesar sedikit
         setLocationRelativeTo(null);
     }
 
@@ -122,11 +124,6 @@ public class MazeApp extends JFrame {
         cbWallDensity = createComboBox(walls);
         cbWallDensity.setSelectedIndex(0);
 
-        JLabel lblDecor = new JLabel("<html><br><center><i>\"Adjust parameters<br>to test the AI.\"</i></center></html>");
-        lblDecor.setForeground(new Color(150, 150, 150));
-        lblDecor.setFont(new Font("Georgia", Font.ITALIC, 12));
-        lblDecor.setAlignmentX(Component.CENTER_ALIGNMENT);
-
         panel.add(lblTitle);
         panel.add(Box.createVerticalStrut(25));
         panel.add(lblSize); panel.add(Box.createVerticalStrut(5)); panel.add(cbMapSize);
@@ -134,8 +131,6 @@ public class MazeApp extends JFrame {
         panel.add(lblTerrain); panel.add(Box.createVerticalStrut(5)); panel.add(cbTerrainDensity);
         panel.add(Box.createVerticalStrut(15));
         panel.add(lblWall); panel.add(Box.createVerticalStrut(5)); panel.add(cbWallDensity);
-        panel.add(Box.createVerticalStrut(30));
-        panel.add(lblDecor);
         panel.add(Box.createVerticalGlue());
 
         return panel;
@@ -144,7 +139,7 @@ public class MazeApp extends JFrame {
     // --- PANEL KANAN: STATS + CONTROLS ---
     private JPanel createRightPanel() {
         JPanel mainPanel = new JPanel(new BorderLayout());
-        mainPanel.setPreferredSize(new Dimension(300, 0));
+        mainPanel.setPreferredSize(new Dimension(320, 0));
         mainPanel.setBackground(JUNGLE_BG_PANEL);
         mainPanel.setBorder(new CompoundBorder(
                 new MatteBorder(0, 8, 0, 0, JUNGLE_WOOD_DARK),
@@ -170,16 +165,19 @@ public class MazeApp extends JFrame {
             }
         });
 
-        JPanel infoPanel = new JPanel(new GridLayout(3, 1, 0, 8));
+        // UPDATE GRID: Menjadi 4 baris untuk Path Length
+        JPanel infoPanel = new JPanel(new GridLayout(4, 1, 0, 8));
         infoPanel.setBackground(JUNGLE_BG_PANEL);
         infoPanel.setBorder(new EmptyBorder(15, 0, 15, 0));
 
         lblTime = createDetailCard("⏳ Execution Time");
         lblCost = createDetailCard("💎 Total Cost");
+        lblPathLength = createDetailCard("📏 Path Length (Steps)"); // Label Baru
         lblVisited = createDetailCard("👣 Nodes Visited");
 
         infoPanel.add(lblTime);
         infoPanel.add(lblCost);
+        infoPanel.add(lblPathLength); // Tambah ke panel
         infoPanel.add(lblVisited);
 
         // --- SUMMARY & RANKING TABLE ---
@@ -193,7 +191,7 @@ public class MazeApp extends JFrame {
         lblEfficiencySummary.setForeground(JUNGLE_PARCHMENT);
         lblEfficiencySummary.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        String[] columns = {"Algorithm", "Time", "Weight"};
+        String[] columns = {"Algorithm", "Time", "Steps"};
         rankingModel = new DefaultTableModel(columns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) { return false; }
@@ -223,7 +221,7 @@ public class MazeApp extends JFrame {
         }
 
         JScrollPane tableScroll = new JScrollPane(rankingTable);
-        tableScroll.setPreferredSize(new Dimension(250, 120));
+        tableScroll.setPreferredSize(new Dimension(250, 100));
         tableScroll.setBorder(new LineBorder(JUNGLE_WOOD_DARK, 1));
         tableScroll.getViewport().setBackground(JUNGLE_BG_PANEL);
 
@@ -249,14 +247,16 @@ public class MazeApp extends JFrame {
                 new EmptyBorder(20, 0, 0, 0)
         ));
 
-        JButton btnGenerate = createStyledButton("Generate Map", JUNGLE_PARCHMENT, JUNGLE_TEXT_DARK);
+        JButton btnGenerate = createSolidButton("Generate Map", JUNGLE_PARCHMENT, JUNGLE_TEXT_DARK);
+
         JLabel lblAlgo = new JLabel("Select Strategy:");
         lblAlgo.setForeground(Color.WHITE);
         lblAlgo.setHorizontalAlignment(SwingConstants.CENTER);
 
         String[] algorithms = {"BFS", "DFS", "Dijkstra", "A* (A-Star)"};
         algorithmSelector = createComboBox(algorithms);
-        JButton btnSolve = createStyledButton("Start Mission", JUNGLE_BTN_GREEN, Color.WHITE);
+
+        JButton btnSolve = createSolidButton("Start Mission", JUNGLE_BTN_GREEN, Color.WHITE);
 
         controlsPanel.add(btnGenerate);
         controlsPanel.add(lblAlgo);
@@ -305,13 +305,29 @@ public class MazeApp extends JFrame {
         return cb;
     }
 
-    private JButton createStyledButton(String text, Color bg, Color fg) {
-        JButton btn = new JButton(text);
-        btn.setFocusPainted(false);
-        btn.setBackground(bg);
-        btn.setForeground(fg);
+    private JButton createSolidButton(String text, Color bgColor, Color textColor) {
+        JButton btn = new JButton(text) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                if (getModel().isPressed()) g2.setColor(bgColor.darker());
+                else if (getModel().isRollover()) g2.setColor(bgColor.brighter());
+                else g2.setColor(bgColor);
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
+                g2.setColor(bgColor.darker().darker());
+                g2.setStroke(new BasicStroke(2));
+                g2.drawRoundRect(0, 0, getWidth()-1, getHeight()-1, 10, 10);
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
         btn.setFont(new Font("Georgia", Font.BOLD, 14));
-        btn.setBorder(BorderFactory.createBevelBorder(javax.swing.border.BevelBorder.RAISED));
+        btn.setForeground(textColor);
+        btn.setFocusPainted(false);
+        btn.setContentAreaFilled(false);
+        btn.setBorderPainted(false);
+        btn.setOpaque(false);
         btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
         return btn;
     }
@@ -323,7 +339,7 @@ public class MazeApp extends JFrame {
         lbl.setForeground(JUNGLE_TEXT_DARK);
         lbl.setFont(new Font("Georgia", Font.PLAIN, 12));
         lbl.setBorder(new LineBorder(JUNGLE_WOOD_DARK, 1, true));
-        lbl.setPreferredSize(new Dimension(0, 50));
+        lbl.setPreferredSize(new Dimension(0, 45));
         return lbl;
     }
 
@@ -358,6 +374,7 @@ public class MazeApp extends JFrame {
     private void clearInfoDisplay() {
         updateCard(lblTime, "⏳ Execution Time", "-");
         updateCard(lblCost, "💎 Total Cost", "-");
+        updateCard(lblPathLength, "📏 Path Length", "-"); // Reset Path Length
         updateCard(lblVisited, "👣 Nodes Visited", "-");
     }
 
@@ -368,7 +385,6 @@ public class MazeApp extends JFrame {
     private void showAlgoDetails(AlgoResult res) {
         updateCard(lblTime, "⏳ Execution Time", String.format("%.2f ms", res.getDurationMs()));
 
-        // --- MODIFIKASI 1: Jika BFS/DFS, tampilkan "-" di Detail Card ---
         String costVal;
         if (res.algorithmName.equals("BFS") || res.algorithmName.equals("DFS")) {
             costVal = "-";
@@ -377,20 +393,18 @@ public class MazeApp extends JFrame {
         }
         updateCard(lblCost, "💎 Total Cost", costVal);
 
+        // --- UPDATE PATH LENGTH DISPLAY ---
+        String stepsVal = (res.pathLength == 0 && res.totalCost >= Integer.MAX_VALUE/2) ? "-" : res.pathLength + " Steps";
+        updateCard(lblPathLength, "📏 Path Length", stepsVal);
+
         updateCard(lblVisited, "👣 Nodes Visited", String.valueOf(res.visitedCount));
     }
 
-    // --- UPDATED: ISI TABEL RANKING DENGAN LOGIKA NO-WEIGHT ---
     private void updateEfficiencySummary() {
         if (runHistory.isEmpty()) return;
-
         List<AlgoResult> sortedResults = new ArrayList<>(runHistory.values());
-
-        // Sorting: Cost Rendah -> Waktu Cepat
         sortedResults.sort((a, b) -> {
-            if (a.totalCost != b.totalCost) {
-                return Integer.compare(a.totalCost, b.totalCost);
-            }
+            if (a.totalCost != b.totalCost) return Integer.compare(a.totalCost, b.totalCost);
             return Double.compare(a.durationNano, b.durationNano);
         });
 
@@ -404,16 +418,8 @@ public class MazeApp extends JFrame {
         rankingModel.setRowCount(0);
         for (AlgoResult r : sortedResults) {
             String timeStr = String.format("%.2f ms", r.getDurationMs());
-
-            // --- MODIFIKASI 2: Jika BFS/DFS, tampilkan "-" di Tabel ---
-            String costStr;
-            if (r.algorithmName.equals("BFS") || r.algorithmName.equals("DFS")) {
-                costStr = "-";
-            } else {
-                costStr = (r.totalCost >= Integer.MAX_VALUE/2) ? "Fail" : String.valueOf(r.totalCost);
-            }
-
-            rankingModel.addRow(new Object[]{r.algorithmName, timeStr, costStr});
+            String stepStr = (r.pathLength == 0) ? "-" : String.valueOf(r.pathLength);
+            rankingModel.addRow(new Object[]{r.algorithmName, timeStr, stepStr});
         }
     }
 
@@ -430,6 +436,7 @@ public class MazeApp extends JFrame {
             long startTime = System.nanoTime();
             int visitedCount = 0;
             int finalCost = Integer.MAX_VALUE;
+            int finalSteps = 0; // Variable untuk Steps
 
             if (algorithmCode.equals("BFS")) found = runBFS(start, end);
             else if (algorithmCode.equals("DFS")) found = runDFS(start, end);
@@ -448,6 +455,7 @@ public class MazeApp extends JFrame {
                     current = current.parent;
                 }
                 finalCost = calcCost;
+                finalSteps = path.size(); // Hitung jumlah langkah
                 mazePanel.setFinalPath(path);
             }
 
@@ -457,7 +465,8 @@ public class MazeApp extends JFrame {
                 }
             }
 
-            AlgoResult res = new AlgoResult(displayName, endTime - startTime, 0, visitedCount, found ? finalCost : Integer.MAX_VALUE);
+            // --- PASS PATH LENGTH KE ALGORESULT ---
+            AlgoResult res = new AlgoResult(displayName, endTime - startTime, finalSteps, visitedCount, found ? finalCost : Integer.MAX_VALUE);
 
             SwingUtilities.invokeLater(() -> {
                 runHistory.put(displayName, res);
@@ -467,9 +476,7 @@ public class MazeApp extends JFrame {
                 }
                 if (!exists) statsDropdown.addItem(displayName);
                 statsDropdown.setSelectedItem(displayName);
-
                 updateEfficiencySummary();
-
                 algorithmSelector.setEnabled(true);
                 isAnimating = false;
             });
